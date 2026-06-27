@@ -1,0 +1,2 @@
+# No external packages needed - uses Python standard library
+# Railway will use this file to detect it's a Python project
