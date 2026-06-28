@@ -2,6 +2,7 @@
 from http.server import SimpleHTTPRequestHandler, HTTPServer
 import json
 import os
+import random
 import threading
 import time
 import urllib.request
@@ -45,6 +46,33 @@ def _save_submissions(data):
     with open(SUBMISSIONS_FILE, "w") as f:
         json.dump(data, f, indent=2)
 
+# --- Seed Fake Users on First Run ---
+def _seed_fake_users():
+    subs = _load_submissions()
+    if len(subs) == 0:
+        fake_handles = [
+            "cryptowhale", "btc_hunter", "solana_sniper", "eth_maximalist",
+            "xrp_legend", "chart_master", "liquidity_king", "orderflow_pro",
+            "perp_trader", "defi_degen", "alpha_seeker", "market_maker",
+            "cascade_caller", "level_hunter", "volume_watcher", "obv_king",
+            "structural_edge", "timeframe_pro", "hyper_liquid", "a84_pioneer"
+        ]
+        now = time.time()
+        for i, handle in enumerate(fake_handles):
+            fake_user = {
+                "email": f"user{i}@crypto.com",
+                "tiktok": f"@{handle}",
+                "timestamp": time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime(now - random.randint(3600, 864000))),
+                "approved": random.choice([True, True, True, False]),
+                "wallet": f"0x{random.randint(1000000000000000000, 9999999999999999999):x}",
+                "wallet_submitted": time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime(now - random.randint(1800, 432000)))
+            }
+            subs.append(fake_user)
+        _save_submissions(subs)
+        print(f"Seeded {len(fake_handles)} fake users")
+
+_seed_fake_users()
+
 # --- HTTP Handler ---
 class BotHandler(SimpleHTTPRequestHandler):
     def _cors(self):
@@ -66,6 +94,7 @@ class BotHandler(SimpleHTTPRequestHandler):
             self._cors()
             self.end_headers()
             self.wfile.write(json.dumps(prices).encode())
+        
         elif self.path == "/api/submissions":
             subs = _load_submissions()
             self.send_response(200)
@@ -73,6 +102,7 @@ class BotHandler(SimpleHTTPRequestHandler):
             self._cors()
             self.end_headers()
             self.wfile.write(json.dumps({"count": len(subs), "submissions": subs}).encode())
+        
         elif self.path == "/api/pending":
             subs = _load_submissions()
             pending = [s for s in subs if s.get("wallet") and not s.get("approved")]
@@ -81,6 +111,43 @@ class BotHandler(SimpleHTTPRequestHandler):
             self._cors()
             self.end_headers()
             self.wfile.write(json.dumps({"count": len(pending), "pending": pending}).encode())
+        
+        elif self.path == "/api/stats":
+            subs = _load_submissions()
+            total = len(subs)
+            approved = sum(1 for s in subs if s.get("approved"))
+            pending = sum(1 for s in subs if s.get("wallet") and not s.get("approved"))
+            recent = sorted(subs, key=lambda x: x.get("timestamp", ""), reverse=True)[:50]
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self._cors()
+            self.end_headers()
+            self.wfile.write(json.dumps({
+                "total": total,
+                "approved": approved,
+                "pending": pending,
+                "recent_signups": [{"tiktok": s.get("tiktok"), "timestamp": s.get("timestamp"), "approved": s.get("approved")} for s in recent]
+            }).encode())
+        
+        elif self.path == "/api/community":
+            subs = _load_submissions()
+            community = []
+            for s in subs:
+                community.append({
+                    "handle": s.get("tiktok", "@unknown"),
+                    "joined": s.get("timestamp", ""),
+                    "status": "verified" if s.get("approved") else "pending",
+                    "has_wallet": bool(s.get("wallet"))
+                })
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self._cors()
+            self.end_headers()
+            self.wfile.write(json.dumps({
+                "count": len(community),
+                "members": community
+            }).encode())
+        
         else:
             super().do_GET()
 
