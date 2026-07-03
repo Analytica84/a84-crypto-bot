@@ -66,8 +66,9 @@
         let currentAsset = 'BTC';
         let ws;
         let canvasData = {};
+        let tfState = {};
+        let livePrice = 0;
 
-        // --- CANVAS DRAWING ---
         function drawChart(canvasId, prices, a84targets) {
             const canvas = document.getElementById(canvasId);
             if (!canvas) return;
@@ -88,7 +89,6 @@
             function toX(i, len) { return (i / (len - 1)) * chartW; }
             function toY(v) { return H - ((v - minV) / range) * H * 0.85 - H * 0.05; }
 
-            // Draw grid lines + right-side price axis labels
             ctx.font = '10px "Segoe UI", sans-serif';
             ctx.fillStyle = '#ffffff';
             ctx.textAlign = 'left';
@@ -107,7 +107,6 @@
                 ctx.fillText(label, chartW + 8, y + 3);
             }
 
-            // Price line — cyan
             ctx.beginPath();
             ctx.strokeStyle = '#00ffff';
             ctx.lineWidth = 2;
@@ -116,7 +115,6 @@
             prices.forEach((v, i) => { i === 0 ? ctx.moveTo(toX(i, prices.length), toY(v)) : ctx.lineTo(toX(i, prices.length), toY(v)); });
             ctx.stroke();
 
-            // A84 Target line — pink
             ctx.beginPath();
             ctx.strokeStyle = '#ff1493';
             ctx.lineWidth = 2;
@@ -126,9 +124,7 @@
             ctx.stroke();
         }
 
-        // --- OBV / A84 TARGET CALCULATION ---
         function calcA84Target(candles) {
-            // OBV calculation
             let obv = 0;
             const obvArr = [];
             for (let i = 0; i < candles.length; i++) {
@@ -140,7 +136,6 @@
                 else if (close < prevClose) obv -= vol;
                 obvArr.push(obv);
             }
-            // Normalize OBV to price range for overlay
             const prices = candles.map(c => c[4]);
             const minP = Math.min(...prices), maxP = Math.max(...prices);
             const minO = Math.min(...obvArr), maxO = Math.max(...obvArr);
@@ -148,11 +143,10 @@
             return obvArr.map(o => minP + ((o - minO) / rangeO) * (maxP - minP));
         }
 
-        // --- FETCH CANDLES FROM HYPERLIQUID ---
-        async function fetchCandles(asset, interval, tfId) {
+        async function initCandles(asset, interval, tfId) {
             try {
                 const endTime = Date.now();
-                const startMap = { '1m': 60*60*1000, '5m': 5*60*60*1000, '15m': 15*60*60*1000, '1h': 60*60*60*1000, '4h': 240*60*60*1000 };
+                const startMap = { '1m': 60*60*1000, '5m': 5*60*60*1000, '15m': 7*24*60*60*1000, '1h': 30*24*60*60*1000, '4h': 10*24*60*60*1000 };
                 const startTime = endTime - startMap[interval];
 
                 const res = await fetch('https://api.hyperliquid.xyz/info', {
@@ -163,28 +157,80 @@
                 const candles = await res.json();
                 if (!candles || candles.length < 2) return;
 
-                const prices = candles.map(c => parseFloat(c.c));
-                const rawForOBV = candles.map(c => [0,0,0,0, parseFloat(c.c), parseFloat(c.v)]);
-                const a84 = calcA84Target(rawForOBV);
+                const rawCandles = candles.map(c => [0,0,0,0, parseFloat(c.c), parseFloat(c.v)]);
+                const lastCandle = rawCandles[rawCandles.length - 1];
+                
+                const a84 = calcA84Target(rawCandles);
+                const prices = rawCandles.map(c => c[4]);
+                
+                tfState[tfId] = {
+                    candles: rawCandles,
+                    obv: a84[a84.length - 1],
+                    lastClose: lastCandle[4],
+                    lastTime: candles[candles.length - 1].t
+                };
 
                 canvasData[tfId] = { prices, a84 };
                 drawChart('chart-' + tfId, prices, a84);
-                // Update A84 header label
-                const lastA84 = a84[a84.length - 1];
-                const a84El = document.getElementById('a84-' + tfId);
-                if (a84El) {
-                    a84El.innerText = 'A84: $' + lastA84.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-                }
+                updateA84Label(tfId, a84[a84.length - 1]);
             } catch(e) {
-                console.log('Candle fetch error:', interval, e);
+                console.log('Init candle error:', interval, e);
+            }
+        }
+
+        async function updateCandles(asset, interval, tfId) {
+            try {
+                const state = tfState[tfId];
+                if (!state) return;
+                
+                const lastTime = state.lastTime;
+                const endTime = Date.now();
+                
+                const res = await fetch('https://api.hyperliquid.xyz/info', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ type: 'candleSnapshot', req: { coin: asset, interval: interval, startTime: lastTime, endTime: endTime } })
+                });
+                const newCandles = await res.json();
+                if (!newCandles || newCandles.length < 2) return;
+                
+                const toAdd = newCandles.slice(1);
+                if (toAdd.length === 0) return;
+                
+                const rawToAdd = toAdd.map(c => [0,0,0,0, parseFloat(c.c), parseFloat(c.v)]);
+                state.candles = state.candles.concat(rawToAdd);
+                
+                const a84 = calcA84Target(state.candles);
+                const prices = state.candles.map(c => c[4]);
+                
+                const lastCandle = rawToAdd[rawToAdd.length - 1];
+                state.obv = a84[a84.length - 1];
+                state.lastClose = lastCandle[4];
+                state.lastTime = toAdd[toAdd.length - 1].t;
+                
+                if (state.candles.length > 500) {
+                    state.candles = state.candles.slice(-500);
+                }
+                
+                canvasData[tfId] = { prices, a84 };
+                drawChart('chart-' + tfId, prices, a84);
+                updateA84Label(tfId, a84[a84.length - 1]);
+            } catch(e) {
+                console.log('Update candle error:', interval, e);
+            }
+        }
+
+        function updateA84Label(tfId, value) {
+            const a84El = document.getElementById('a84-' + tfId);
+            if (a84El) {
+                a84El.innerText = 'A84: $' + value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
             }
         }
 
         function loadAllCharts(asset) {
-            TIMEFRAMES.forEach(tf => fetchCandles(asset, HL_INTERVALS[tf], tf));
+            TIMEFRAMES.forEach(tf => initCandles(asset, HL_INTERVALS[tf], tf));
         }
 
-        // --- LIVE PRICE VIA WEBSOCKET ---
         function connect() {
             ws = new WebSocket('wss://api.hyperliquid.xyz/ws');
 
@@ -199,7 +245,8 @@
                 if (msg.channel === 'allMids' && msg.data && msg.data.mids) {
                     const price = msg.data.mids[currentAsset];
                     if (price) {
-                        const formatted = '$' + parseFloat(price).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                        livePrice = parseFloat(price);
+                        const formatted = '$' + livePrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
                         TIMEFRAMES.forEach(tf => { document.getElementById('price-' + tf).innerText = formatted; });
                     }
                 }
@@ -217,17 +264,18 @@
             };
         }
 
-        // --- ASSET SWITCH ---
         document.getElementById('assetDropdown').addEventListener('change', (e) => {
             currentAsset = e.target.value;
+            tfState = {};
+            livePrice = 0;
             loadAllCharts(currentAsset);
         });
 
-        // --- INIT ---
         connect();
         loadAllCharts(currentAsset);
-        // Refresh charts every 60 seconds
-        setInterval(() => loadAllCharts(currentAsset), 60000);
+        setInterval(() => {
+            TIMEFRAMES.forEach(tf => updateCandles(currentAsset, HL_INTERVALS[tf], tf));
+        }, 60000);
     </script>
 </body>
 </html>
