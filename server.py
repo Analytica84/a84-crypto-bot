@@ -9,6 +9,9 @@ Config (Railway environment variables):
   ADMIN_TOKEN   required for admin routes. If unset, admin routes are disabled.
   ALLOWED_ORIGINS  optional, comma separated, e.g. https://www.analytica84.com
   DATA_DIR      optional, where submissions.json is stored (default: .)
+  WHOP_API_KEY  Whop company API key (secret). Needed for the paid dashboard.
+  WHOP_APP_ID   Whop app id (app_...). Needed for the paid dashboard.
+If either WHOP value is missing, the paid dashboard stays closed (fails safe).
 """
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import hmac
@@ -18,6 +21,7 @@ import os
 import re
 import threading
 import time
+import urllib.error
 import urllib.request
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -25,6 +29,14 @@ DATA_DIR = os.environ.get("DATA_DIR", BASE_DIR)
 SUBMISSIONS_FILE = os.path.join(DATA_DIR, "submissions.json")
 ADMIN_TOKEN = os.environ.get("ADMIN_TOKEN", "")
 ALLOWED_ORIGINS = {o.strip() for o in os.environ.get("ALLOWED_ORIGINS", "").split(",") if o.strip()}
+
+WHOP_API_KEY = os.environ.get("WHOP_API_KEY", "")
+WHOP_APP_ID = os.environ.get("WHOP_APP_ID", "")
+DASHBOARD_FILE = "whop-dashboard.html"   # never in PUBLIC_FILES: only served after a paid-access check
+EXP_RE = re.compile(r"^/experiences/(exp_[A-Za-z0-9]+)(?:/.*)?$")
+USER_RE = re.compile(r"^user_[A-Za-z0-9]+$")
+ACCESS_CACHE_SECONDS = 60
+USER_RATE_LIMIT = 120    # paid-dashboard page loads per minute per user
 
 MAX_BODY = 4096          # bytes
 MAX_SUBMISSIONS = 20000
@@ -98,11 +110,11 @@ _hits = {}
 _hits_lock = threading.Lock()
 
 
-def _rate_ok(ip):
+def _rate_ok(ip, limit=RATE_LIMIT):
     now = time.time()
     with _hits_lock:
         arr = [t for t in _hits.get(ip, []) if now - t < 60]
-        if len(arr) >= RATE_LIMIT:
+        if len(arr) >= limit:
             _hits[ip] = arr
             return False
         arr.append(now)
@@ -111,6 +123,71 @@ def _rate_ok(ip):
             for k in [k for k, v in _hits.items() if not v or now - v[-1] > 60]:
                 _hits.pop(k, None)
     return True
+
+
+# --- Whop paid access ---
+def _whop_enabled():
+    return bool(WHOP_API_KEY and WHOP_APP_ID)
+
+
+def _verify_user(token):
+    """Return the Whop user id from a signed x-whop-user-token, or None."""
+    try:
+        from whop_sdk.lib.verify_user_token import try_verify_user_token
+        payload = try_verify_user_token(token, app_id=WHOP_APP_ID)
+        return payload.user_id if payload else None
+    except Exception as e:
+        print("Token verify error:", type(e).__name__)
+        return None
+
+
+_access_cache = {}
+_access_lock = threading.Lock()
+
+
+def _has_access(user_id, resource_id):
+    """Ask Whop if this user has access (paid membership or team member). Fails closed."""
+    key = (user_id, resource_id)
+    now = time.time()
+    with _access_lock:
+        hit = _access_cache.get(key)
+        if hit and now - hit < ACCESS_CACHE_SECONDS:
+            return True
+    try:
+        req = urllib.request.Request(
+            "https://api.whop.com/api/v1/users/%s/access/%s" % (user_id, resource_id),
+            headers={"Authorization": "Bearer " + WHOP_API_KEY, "Accept": "application/json"},
+        )
+        with urllib.request.urlopen(req, timeout=8) as res:
+            data = json.loads(res.read())
+        ok = data.get("has_access") is True
+    except Exception as e:
+        print("Whop access check error:", type(e).__name__)
+        return False
+    if ok:
+        with _access_lock:
+            if len(_access_cache) > 5000:
+                _access_cache.clear()
+            _access_cache[key] = now
+    return ok
+
+
+DENIED_HTML = (
+    "<!DOCTYPE html><html><head><meta charset='utf-8'>"
+    "<meta name='viewport' content='width=device-width, initial-scale=1'>"
+    "<title>ANALYTICA84</title></head>"
+    "<body style='background:#000;color:#fff;font-family:Segoe UI,Tahoma,sans-serif;"
+    "text-align:center;padding:60px 20px'>"
+    "<h2 style='color:#00ffff'>ANALYTICA84</h2>"
+    "<p>An active Analytica84 membership is required to view this dashboard.</p>"
+    "<p style='color:#ff1493'>Open it from your Whop membership after purchase.</p>"
+    "</body></html>"
+)
+
+UNAVAILABLE_HTML = DENIED_HTML.replace(
+    "An active Analytica84 membership is required to view this dashboard.",
+    "This dashboard is not available right now.",
+).replace("Open it from your Whop membership after purchase.", "Please try again later.")
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -125,11 +202,12 @@ class Handler(BaseHTTPRequestHandler):
         fwd = self.headers.get("X-Forwarded-For", "")
         return fwd.split(",")[0].strip() if fwd else self.client_address[0]
 
-    def _headers(self, status, ctype="application/json", extra=None):
+    def _headers(self, status, ctype="application/json", extra=None, framable=False):
         self.send_response(status)
         self.send_header("Content-Type", ctype)
         self.send_header("X-Content-Type-Options", "nosniff")
-        self.send_header("X-Frame-Options", "SAMEORIGIN")
+        if not framable:
+            self.send_header("X-Frame-Options", "SAMEORIGIN")
         self.send_header("Referrer-Policy", "no-referrer")
         origin = self.headers.get("Origin", "")
         if origin and origin in ALLOWED_ORIGINS:
@@ -147,6 +225,33 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Cache-Control", "no-store")
         self.end_headers()
         self.wfile.write(body)
+
+    def _html(self, status, body, framable=False):
+        data = body.encode() if isinstance(body, str) else body
+        self._headers(status, "text/html; charset=utf-8", framable=framable)
+        self.send_header("Content-Length", str(len(data)))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        self.wfile.write(data)
+
+    def _experience(self, exp_id):
+        """Paid dashboard. Opens only inside Whop for a verified user with access."""
+        if not _whop_enabled():
+            return self._html(503, UNAVAILABLE_HTML, framable=True)
+        token = self.headers.get("x-whop-user-token", "")
+        user_id = _verify_user(token) if token else None
+        if not user_id or not USER_RE.match(user_id):
+            return self._html(403, DENIED_HTML, framable=True)
+        if not _rate_ok("u:" + user_id, USER_RATE_LIMIT):
+            return self._html(429, UNAVAILABLE_HTML, framable=True)
+        if not _has_access(user_id, exp_id):
+            return self._html(403, DENIED_HTML, framable=True)
+        try:
+            with open(os.path.join(BASE_DIR, DASHBOARD_FILE), "rb") as f:
+                body = f.read()
+        except OSError:
+            return self._html(503, UNAVAILABLE_HTML, framable=True)
+        return self._html(200, body, framable=True)
 
     def _is_admin(self):
         if not ADMIN_TOKEN:
@@ -212,6 +317,10 @@ class Handler(BaseHTTPRequestHandler):
                 "has_wallet": bool(s.get("wallet")),
             } for s in subs]
             return self._json(200, {"count": len(members), "members": members})
+
+        m = EXP_RE.match(path)
+        if m:
+            return self._experience(m.group(1))
 
         if path.startswith("/api/"):
             return self._json(404, {"error": "not found"})

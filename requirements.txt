@@ -1,2 +1,4 @@
-# No external packages needed - uses Python standard library
-# Railway will use this file to detect it's a Python project
+# Railway reads this file to install what the server needs.
+# These two let the server check the signed token Whop sends (the paid-dashboard lock).
+whop-sdk==2.6.0
+pyjwt[crypto]==2.7.0
