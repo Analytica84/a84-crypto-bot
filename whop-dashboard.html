@@ -161,19 +161,61 @@
         @media(max-width: 480px) {
             .timeframe-grid { grid-template-columns: 1fr; }
         }
+
+        /* ===== SCALE-IN CALC (button + pop-up panel) ===== */
+        #calcOpen { margin-top: 10px; background: #000; color: #ff1493; border: 2px solid #ff1493; border-radius: 8px; padding: 9px 26px; font-size: 14px; font-weight: 900; letter-spacing: 2px; text-transform: uppercase; cursor: pointer; box-shadow: 0 0 15px rgba(255,20,147,0.3); font-family: inherit; }
+        #calcOpen:hover { background: rgba(255,20,147,0.15); }
+        #calcModal { display: none; position: fixed; inset: 0; z-index: 2000; background: rgba(0,0,0,0.85); overflow-y: auto; padding: 12px; -webkit-text-size-adjust: 100%; }
+        #calcModal.open { display: block; }
+        #calcModal { --teal:#12544f; --pink:#ff1f8e; --cyan:#00d8ff; --text:#f2f5f7; --dim:#8b97a3; --green:#00e676; --red:#ff2d55; --yellow:#ffe600; line-height: 1.35; }
+        #calcModal .panel { position: relative; width: 100%; max-width: 380px; margin: 8px auto 24px; background: #000; border: 2px solid #ff1493; border-radius: 14px; padding: 12px; box-shadow: 0 0 20px rgba(255,20,147,0.3); }
+        #calcModal .xbtn { position: absolute; top: 6px; right: 8px; width: 34px; height: 34px; border: 0; background: transparent; color: var(--dim); font-size: 20px; cursor: pointer; font-family: inherit; }
+        #calcModal .sticks { display: flex; justify-content: center; gap: 6px; margin: 2px 0 8px; }
+        #calcModal .sticks i { display: block; width: 26px; height: 6px; border-radius: 4px; transform: rotate(-12deg); }
+        #calcModal h1 { margin: 0 0 10px; text-align: center; font-size: 15px; font-weight: bold; letter-spacing: .3px; }
+        #calcModal h1 span:nth-child(1){color:#ff2d55} #calcModal h1 span:nth-child(2){color:#ffe600}
+        #calcModal .card { background: #07090c; border: 1px solid var(--teal); border-radius: 12px; padding: 10px; margin-bottom: 8px; }
+        #calcModal .card.pink { border-color: #7a1646; }
+        #calcModal .side { display: flex; gap: 8px; }
+        #calcModal .side button { flex: 1; padding: 10px 6px; font-size: 15px; font-family: inherit; font-weight: bold; border-radius: 10px; border: 2px solid var(--teal); background: transparent; color: var(--dim); cursor: pointer; }
+        #calcModal .side button.on.sell { border-color: var(--red); color: #fff; background: rgba(255,45,85,.18); }
+        #calcModal .side button.on.buy { border-color: var(--green); color: #fff; background: rgba(0,230,118,.16); }
+        #calcModal .row2 { display: flex; gap: 8px; }
+        #calcModal .row2 > div { flex: 1; min-width: 0; }
+        #calcModal label { display: block; margin: 0 0 3px; font-size: 12px; color: var(--dim); }
+        #calcModal input { width: 100%; padding: 9px 8px; font-size: 16px; font-family: inherit; color: var(--cyan); background: #000; border: 1px solid var(--teal); border-radius: 8px; }
+        #calcModal input::placeholder { color: #3b4a55; }
+        #calcModal button:focus-visible, #calcModal input:focus-visible, #calcOpen:focus-visible { outline: 2px solid var(--cyan); outline-offset: 1px; }
+        #calcMsg { display: none; margin-bottom: 8px; padding: 9px 10px; border-radius: 10px; border: 1px solid var(--red); color: #ff8aa0; font-size: 13px; }
+        #calcOut { display: none; }
+        #calcModal table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+        #calcModal th { text-align: right; font-weight: normal; font-size: 11px; color: var(--dim); padding: 0 2px 6px; }
+        #calcModal th:first-child, #calcModal td:first-child { text-align: left; width: 13%; }
+        #calcModal td { text-align: right; padding: 8px 2px; font-size: 13px; color: var(--cyan); border-top: 1px solid #10202a; font-variant-numeric: tabular-nums; white-space: nowrap; }
+        #calcModal td:first-child { color: var(--text); font-weight: bold; }
+        #calcModal td.red { color: var(--pink); font-weight: bold; }
+        #calcModal .lines p { margin: 0 0 6px; font-size: 12.5px; }
+        #calcModal .lines p:last-child { margin: 0; }
+        #calcModal .lines b { font-size: 13px; }
+        #calcModal .warn { color: var(--yellow); }
+        #calcModal .get { color: var(--pink); }
+        #calcModal .note { margin: 0; font-size: 11px; color: var(--dim); }
     </style>
+<base target="_blank">
+<base target="_blank">
+<base target="_blank">
 <base target="_blank">
 </head>
 <body>
 
     <!-- NAVBAR -->
     <nav class="navbar">
-        <a href="https://www.analytica84.com/" class="nav-logo"><img src="/a84-bolt-logo.jpg" alt="ANALYTICA84"></a>
+        <a href="index.html" class="nav-logo"><img src="a84-bolt-logo.jpg" alt="ANALYTICA84"></a>
 
         <ul class="nav-links" id="navLinks">
-            <li><a href="https://www.analytica84.com/community.html" data-en="Community" data-es="Comunidad">Community</a></li>
-            <li><a href="https://www.analytica84.com/learn.html" data-en="Learn" data-es="Aprender">Learn</a></li>
-            <li><a href="#" target="_self" class="active" data-en="Dashboard" data-es="Panel">Dashboard</a></li>
+            <li><a href="community.html" data-en="Community" data-es="Comunidad">Community</a></li>
+            <li><a href="learn.html" data-en="Learn" data-es="Aprender">Learn</a></li>
+            <li><a href="dashboard.html" class="active" data-en="Dashboard" data-es="Panel">Dashboard</a></li>
         </ul>
 
         <div class="lang-toggle">
@@ -208,6 +250,7 @@
                 </optgroup>
             </select>
         </div>
+        <div><button type="button" id="calcOpen">Scale-in calc</button></div>
     </div>
 
     <!-- A84 TRADES PANEL -->
@@ -226,6 +269,15 @@
                     <span style="color: #ffffff; font-size: 12px;">No closed trades</span>
                 </div>
             </div>
+        </div>
+    </div>
+
+    <!-- HIGHER TIMEFRAME TARGETS — hidden until the 4h target is breached -->
+    <div id="escalationPanel" style="display:none; text-align:center; margin: 20px auto; max-width: 1400px; border: 2px solid #ff1493; border-radius: 12px; padding: 15px 30px; box-shadow: 0 0 20px rgba(255,20,147,0.3);">
+        <span style="color:#ff1493; font-weight:900; letter-spacing:2px; font-size:14px;">4H TARGET BREACHED — HIGHER TIMEFRAME TARGETS</span>
+        <div style="display:flex; flex-wrap:wrap; justify-content:center; gap:40px; margin-top:10px; font-size:16px; font-weight:700;">
+            <span id="esc-daily" style="color:#ffffff;">Daily target: loading...</span>
+            <span id="esc-weekly" style="color:#ffffff;">Weekly target: loading...</span>
         </div>
     </div>
 
@@ -249,7 +301,8 @@
 
     <script>
         const TIMEFRAMES = ['4h','1h','15m','5m','1m'];
-        const HL_INTERVALS = { '1m':'1m', '5m':'5m', '15m':'15m', '1h':'1h', '4h':'4h' };
+        const ESC_TIMEFRAMES = ['1d','1w']; // higher timeframes — only fetched after a 4h breach, never drawn as boxes
+        const HL_INTERVALS = { '1m':'1m', '5m':'5m', '15m':'15m', '1h':'1h', '4h':'4h', '1d':'1d', '1w':'1w' };
         let currentAsset = 'BTC';
         let ws;
         let canvasData = {};
@@ -260,9 +313,13 @@
         let openPositions = []; // Track open positions for TMV breakout alerts
         let lastAlertState = {}; // Track last alert per position to avoid spam
 
+        // Higher-timeframe strip state: which asset it was fired for, plus the daily / weekly results
+        let escState = { asset: null, d: null, w: null };
+        let escToken = 0; // newest request wins; older answers are ignored
+
         // === CANDLE CAP — matches confirmed real cycle lengths, same for every asset ===
-        const CANDLE_CAP = { '4h': 60, '1h': 168, '15m': 480, '5m': 576, '1m': 360 };
-        const INTERVAL_MINUTES = { '4h': 240, '1h': 60, '15m': 15, '5m': 5, '1m': 1 };
+        const CANDLE_CAP = { '4h': 60, '1h': 168, '15m': 480, '5m': 576, '1m': 360, '1d': 180, '1w': 104 };
+        const INTERVAL_MINUTES = { '4h': 240, '1h': 60, '15m': 15, '5m': 5, '1m': 1, '1d': 1440, '1w': 10080 };
 
         // === ATR — background-only, never drawn, never touches price scale ===
         // Just measures "how big is a normal candle" per box, per asset, right now.
@@ -294,6 +351,7 @@
             const absGap = Math.abs(gap);
             const lockThreshold = atr * LOCK_MULT;
             const killThreshold = atr * KILL_MULT;
+            let targetHit = false;
 
             if (absGap > lockThreshold) {
                 const direction = gap > 0 ? 'bull' : 'bear';
@@ -311,12 +369,21 @@
             // Hit
             if (state.active && state.direction === 'bull' && currentPrice >= state.frozenPrice) {
                 state.active = false;
+                targetHit = true;
             } else if (state.active && state.direction === 'bear' && currentPrice <= state.frozenPrice) {
                 state.active = false;
+                targetHit = true;
             }
             // Death (gap collapsed)
             else if (state.active && absGap < killThreshold) {
                 state.active = false;
+            }
+
+            // 4h breach -> show the daily and weekly targets.
+            // Fires on a real hit, or when price is sitting on the 4h target (gap collapsed, no live target).
+            // escalate() only does anything once per asset, so repeated calls are harmless.
+            if (tfId === '4h' && (targetHit || (!state.active && absGap < killThreshold))) {
+                escalate(currentAsset);
             }
             return state;
         }
@@ -445,6 +512,7 @@
                     body: JSON.stringify({ type: 'candleSnapshot', req: { coin: asset, interval: interval, startTime: startTime, endTime: endTime }, dex: getDex(asset) })
                 });
                 const candles = await res.json();
+                if (asset !== currentAsset) return; // asset was switched while loading — drop the old answer
                 if (!candles || candles.length < 2) return;
 
                 const rawCandles = candles.map(c => [0, parseFloat(c.h), parseFloat(c.l), 0, parseFloat(c.c), parseFloat(c.v)]);
@@ -483,6 +551,7 @@
                     body: JSON.stringify({ type: 'candleSnapshot', req: { coin: asset, interval: interval, startTime: lastTime, endTime: endTime }, dex: getDex(asset) })
                 });
                 const newCandles = await res.json();
+                if (asset !== currentAsset) return; // asset was switched while loading — drop the old answer
                 if (!newCandles || newCandles.length < 2) return;
 
                 const toAdd = newCandles.slice(1);
@@ -520,6 +589,90 @@
             if (a84El) {
                 a84El.innerText = 'A84: ' + formatPrice(currentAsset, value);
             }
+        }
+
+        // ===== HIGHER TIMEFRAME TARGETS (daily + weekly) =====
+        // Hidden until the 4h target is breached. One strip, two text lines. No extra boxes, no extra charts.
+
+        function currentLivePrice() {
+            return currentAsset.startsWith('xyz:') ? xyzLivePrice : livePrice;
+        }
+
+        // Same target math as every other box, run once on daily or weekly candles.
+        async function fetchEscTarget(asset, tf) {
+            try {
+                const endTime = Date.now();
+                const startTime = endTime - CANDLE_CAP[tf] * INTERVAL_MINUTES[tf] * 60 * 1000;
+                const res = await fetch('https://api.hyperliquid.xyz/info', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ type: 'candleSnapshot', req: { coin: asset, interval: HL_INTERVALS[tf], startTime: startTime, endTime: endTime }, dex: getDex(asset) })
+                });
+                const candles = await res.json();
+                if (!Array.isArray(candles) || candles.length < 2) return { na: true };
+                const raw = candles.map(c => [0, parseFloat(c.h), parseFloat(c.l), 0, parseFloat(c.c), parseFloat(c.v)]);
+                const a84 = calcA84Target(raw);
+                const target = a84[a84.length - 1];
+                const lastClose = raw[raw.length - 1][4];
+                if (!isFinite(target) || !isFinite(lastClose)) return { na: true };
+                return { target: target, lastClose: lastClose };
+            } catch(e) {
+                console.log('Escalation fetch error:', tf, e);
+                return { na: true };
+            }
+        }
+
+        async function loadEscalation(asset) {
+            const token = ++escToken;
+            const results = await Promise.all([fetchEscTarget(asset, '1d'), fetchEscTarget(asset, '1w')]);
+            // Ignore if a newer request started or the asset changed while we waited.
+            if (token !== escToken || asset !== currentAsset || escState.asset !== asset) return;
+            escState.d = results[0];
+            escState.w = results[1];
+            renderEscalation();
+        }
+
+        // Called when the 4h target is breached. Does its work once per asset.
+        function escalate(asset) {
+            if (escState.asset === asset) return;
+            escState = { asset: asset, d: null, w: null };
+            renderEscalation();
+            loadEscalation(asset);
+        }
+
+        function resetEscalation() {
+            escToken++;
+            escState = { asset: null, d: null, w: null };
+            renderEscalation();
+        }
+
+        function setEscLine(id, label, info) {
+            const el = document.getElementById(id);
+            if (!el) return;
+            if (!info) {
+                el.textContent = label + ' target: loading...';
+                el.style.color = '#ffffff';
+            } else if (info.na) {
+                el.textContent = label + ' target: not available';
+                el.style.color = '#ffffff';
+            } else {
+                const price = currentLivePrice() || info.lastClose;
+                const up = info.target > price;
+                el.textContent = label + ' target ' + (up ? '▲ ' : '▼ ') + formatPrice(currentAsset, info.target);
+                el.style.color = up ? '#00ff00' : '#ff0000';
+            }
+        }
+
+        function renderEscalation() {
+            const panel = document.getElementById('escalationPanel');
+            if (!panel) return;
+            if (escState.asset === null || escState.asset !== currentAsset) {
+                panel.style.display = 'none';
+                return;
+            }
+            panel.style.display = 'block';
+            setEscLine('esc-daily', 'Daily', escState.d);
+            setEscLine('esc-weekly', 'Weekly', escState.w);
         }
 
         function loadAllCharts(asset) {
@@ -833,6 +986,7 @@ function connect() {
             const publicBadge = document.getElementById('public-bridge-15m');
             if (publicBadge) publicBadge.innerHTML = '';
             TIMEFRAMES.forEach(tf => { boxTargets[tf] = { frozenPrice: null, direction: null, maxGap: 0, active: false }; });
+            resetEscalation(); // hide the daily/weekly strip and forget the old asset
 
             if (currentAsset.startsWith('xyz:')) {
                 stopXyzPolling();
@@ -853,6 +1007,8 @@ function connect() {
             TIMEFRAMES.forEach(tf => updateCandles(currentAsset, HL_INTERVALS[tf], tf));
             checkTMVBreakout();
             checkPublicBridgeAlert();
+            // Keep the daily/weekly strip fresh, but only while it is showing
+            if (escState.asset === currentAsset) loadEscalation(currentAsset);
         }, 60000);
 
         // Poll for open positions every 10 seconds
@@ -867,10 +1023,9 @@ function connect() {
                 const html = el.getAttribute('data-' + lang);
                 if (html) el.innerHTML = html;
             });
-            try { localStorage.setItem('a84-lang', lang); } catch (e) {}
+            localStorage.setItem('a84-lang', lang);
         }
-        let savedLang = 'en';
-        try { savedLang = localStorage.getItem('a84-lang') || 'en'; } catch (e) {}
+        const savedLang = localStorage.getItem('a84-lang') || 'en';
         if (savedLang !== 'en') setLang(savedLang);
 
         function toggleMenu() {
@@ -881,6 +1036,140 @@ function connect() {
                 document.getElementById('navLinks').classList.remove('active');
             });
         });
+    </script>
+
+
+    <!-- SCALE-IN CALCULATOR (pop-up panel, opens from the Scale-in calc button) -->
+    <div id="calcModal" role="dialog" aria-modal="true" aria-label="Scale-in calculator">
+      <div class="panel">
+        <button type="button" class="xbtn" id="calcClose" aria-label="Close">&#10005;</button>
+        <div class="sticks" aria-hidden="true">
+          <i style="background:#ff2d55"></i><i style="background:#ff9500"></i><i style="background:#ffe600"></i><i style="background:#00e676"></i><i style="background:#00c8ff"></i><i style="background:#8a2be2"></i><i style="background:#ff1f8e"></i>
+        </div>
+        <h1><span>SCALE-IN</span> <span>CALCULATOR</span></h1>
+
+        <div class="card">
+          <div class="side" role="group" aria-label="Trade direction">
+            <button type="button" id="calcSell" class="on sell">Sell (short)</button>
+            <button type="button" id="calcBuy" class="buy">Buy (long)</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="row2">
+            <div><label for="calcEntry">Entry price</label><input id="calcEntry" type="text" inputmode="decimal" autocomplete="off" placeholder="71581.50"></div>
+            <div><label for="calcDaily">Daily target</label><input id="calcDaily" type="text" inputmode="decimal" autocomplete="off" placeholder="66080.86"></div>
+          </div>
+          <div style="margin-top:8px"><label for="calcHour">1h target (optional)</label><input id="calcHour" type="text" inputmode="decimal" autocomplete="off" placeholder="72526"></div>
+        </div>
+
+        <div id="calcMsg" role="alert"></div>
+
+        <div id="calcOut">
+          <div class="card pink">
+            <table>
+              <thead><tr><th>Piece</th><th>Go in at</th><th>Avg entry</th><th>10% redline</th></tr></thead>
+              <tbody id="calcRows"></tbody>
+            </table>
+          </div>
+          <div class="card lines" id="calcLines"></div>
+          <p class="note">Each piece is 1/3. Add pieces 2 and 3 only after price moves your way. The redline is a 10% loss on the whole position from your average entry (with leverage your account loss is bigger). It moves after each add. A suggestion, not an order.</p>
+        </div>
+      </div>
+    </div>
+
+    <script>
+    (function () {
+    /* ===== CORE MATH (tested separately) ===== */function cleanNumber(text) {
+  if (typeof text === 'number') return text;
+  var s = String(text == null ? '' : text).replace(/[$,\s]/g, '');
+  if (s === '' || !/^-?\d*\.?\d+$/.test(s)) return NaN;
+  return parseFloat(s);
+}
+
+function money(x) {
+  var d = Math.abs(x) >= 100 ? 2 : 5;
+  var n = x.toFixed(d);
+  var parts = n.split('.');
+  parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  return '$' + parts.join('.');
+}
+
+function scaleIn(side, entry, daily, hour) {
+  var res = { ok:false, error:'' };
+  if (side !== 'sell' && side !== 'buy') { res.error = 'Pick Sell or Buy.'; return res; }
+  if (!(entry > 0)) { res.error = 'Type your entry price.'; return res; }
+  if (!(daily > 0)) { res.error = 'Type your daily target.'; return res; }
+  if (side === 'sell' && !(daily < entry)) { res.error = 'On a sell, the daily target must be BELOW your entry.'; return res; }
+  if (side === 'buy' && !(daily > entry)) { res.error = 'On a buy, the daily target must be ABOVE your entry.'; return res; }
+  var step = (daily - entry) / 3;
+  var prices = [entry, entry + step, entry + 2 * step];
+  var rows = [];
+  var sum = 0;
+  for (var i = 0; i < 3; i++) {
+    sum += prices[i];
+    var avg = sum / (i + 1);
+    var redline = side === 'sell' ? avg * 1.10 : avg * 0.90;
+    rows.push({ piece: i + 1, price: prices[i], avg: avg, redline: redline });
+  }
+  res.ok = true;
+  res.rows = rows;
+  res.gap = Math.abs(daily - entry);
+  res.hourWarning = null;
+  if (hour > 0) {
+    var rightSide = side === 'sell' ? hour > entry : hour < entry;
+    if (rightSide) res.hourWarning = hour;
+    else res.hourNote = 'Your 1h target is on the profit side of your entry, so it is not shown as a warning line.';
+  }
+  return res;
+}
+/* ===== END CORE MATH ===== */
+
+    var side = 'sell';
+    function q(id) { return document.getElementById(id); }
+    function plain(x) { return money(x).replace('$', ''); }
+
+    function show() {
+      var r = scaleIn(side, cleanNumber(q('calcEntry').value), cleanNumber(q('calcDaily').value), cleanNumber(q('calcHour').value));
+      var typedSomething = q('calcEntry').value.trim() !== '' || q('calcDaily').value.trim() !== '';
+      if (!r.ok) {
+        q('calcOut').style.display = 'none';
+        q('calcMsg').style.display = typedSomething ? 'block' : 'none';
+        q('calcMsg').textContent = r.error;
+        return;
+      }
+      q('calcMsg').style.display = 'none';
+      var html = '';
+      for (var i = 0; i < r.rows.length; i++) {
+        var w = r.rows[i];
+        html += '<tr><td>#' + w.piece + '</td><td>' + plain(w.price) + '</td><td>' + plain(w.avg) + '</td><td class="red">' + plain(w.redline) + '</td></tr>';
+      }
+      q('calcRows').innerHTML = html;
+      var lines = '<p>Gap, entry to daily target: <b style="color:var(--cyan)">' + money(r.gap) + '</b></p>';
+      if (r.hourWarning) lines += '<p class="warn">Warning line (1h target): <b>' + money(r.hourWarning) + '</b>. A nearby pop, not the get-out line.</p>';
+      if (r.hourNote) lines += '<p>' + r.hourNote + '</p>';
+      lines += '<p class="get">Get-out line (10% redline), piece 1 only: <b>' + money(r.rows[0].redline) + '</b></p>';
+      q('calcLines').innerHTML = lines;
+      q('calcOut').style.display = 'block';
+    }
+
+    function setSide(s) {
+      side = s;
+      q('calcSell').className = s === 'sell' ? 'on sell' : 'sell';
+      q('calcBuy').className = s === 'buy' ? 'on buy' : 'buy';
+      show();
+    }
+    function openCalc() { q('calcModal').className = 'open'; }
+    function closeCalc() { q('calcModal').className = ''; }
+
+    q('calcOpen').addEventListener('click', openCalc);
+    q('calcClose').addEventListener('click', closeCalc);
+    q('calcModal').addEventListener('click', function (e) { if (e.target === q('calcModal')) closeCalc(); });
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeCalc(); });
+    q('calcSell').addEventListener('click', function () { setSide('sell'); });
+    q('calcBuy').addEventListener('click', function () { setSide('buy'); });
+    ['calcEntry', 'calcDaily', 'calcHour'].forEach(function (id) { q(id).addEventListener('input', show); });
+    })();
     </script>
 
 </body>
