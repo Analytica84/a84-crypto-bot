@@ -328,6 +328,13 @@
         let escState = { asset: null, d: null, w: null };
         let escToken = 0; // newest request wins; older answers are ignored
 
+        // === 4H BREACH MODE — drives the 15m badge and keeps the daily/weekly strip up ===
+        // One record per breach: which way (down/up), the 4h target line that was crossed,
+        // and the 15m chart top / bottom numbers FROZEN at the moment of the breach.
+        let breach = null;
+        let breachEndedKey = ''; // remembers a breach that already finished so it does not restart
+        const BREACH_MAX_DAYS = 14; // safety stop: a breach this old is dropped, so the badge never stays stuck
+
         // === CANDLE CAP — matches confirmed real cycle lengths, same for every asset ===
         const CANDLE_CAP = { '4h': 60, '1h': 168, '15m': 480, '5m': 576, '1m': 360, '1d': 180, '1w': 104 };
         const INTERVAL_MINUTES = { '4h': 240, '1h': 60, '15m': 15, '5m': 5, '1m': 1, '1d': 1440, '1w': 10080 };
@@ -352,10 +359,11 @@
         const LOCK_MULT = 1.5;  // gap must exceed 1.5x ATR to lock a target
         const KILL_MULT = 0.4;  // gap collapses below 0.4x ATR = target considered dead
 
-        function updateTargetPersistence(tfId, candles, a84Line, currentPrice) {
-            const state = boxTargets[tfId];
+        // The target math itself (unchanged). Works on any state object, so the same math
+        // is used live and when the page rebuilds the 4h history on load.
+        function stepTarget(state, candles, a84Line, currentPrice) {
             const atr = calcATR(candles, 14);
-            if (atr === 0) return state; // not enough data yet, leave as-is
+            if (atr === 0) return { ready: false, hit: false, collapsed: false }; // not enough data yet, leave as-is
 
             const liveObvPrice = a84Line[a84Line.length - 1];
             const gap = liveObvPrice - currentPrice;
@@ -390,11 +398,24 @@
                 state.active = false;
             }
 
+            return { ready: true, hit: targetHit, collapsed: (!state.active && absGap < killThreshold) };
+        }
+
+        function updateTargetPersistence(tfId, candles, a84Line, currentPrice) {
+            const state = boxTargets[tfId];
+            const r = stepTarget(state, candles, a84Line, currentPrice);
+            if (!r.ready) return state;
+
             // 4h breach -> show the daily and weekly targets.
-            // Fires on a real hit, or when price is sitting on the 4h target (gap collapsed, no live target).
+            // A real hit also starts the breach mode (badge rule). Price sitting on the 4h target
+            // (gap collapsed, no live target) still brings the strip up, as before.
             // escalate() only does anything once per asset, so repeated calls are harmless.
-            if (tfId === '4h' && (targetHit || (!state.active && absGap < killThreshold))) {
-                escalate(currentAsset);
+            if (tfId === '4h') {
+                if (r.hit) {
+                    startBreach(state.direction === 'bear' ? 'down' : 'up', state.frozenPrice);
+                } else if (r.collapsed) {
+                    escalate(currentAsset);
+                }
             }
             return state;
         }
@@ -686,8 +707,136 @@
             setEscLine('esc-weekly', 'Weekly', escState.w);
         }
 
+        // ===== 4H BREACH MODE =====
+
+        function breachKey(dir, level) {
+            return currentAsset + '|' + dir + '|' + level;
+        }
+
+        // The top and bottom numbers printed on a chart (same math drawChart uses for its labels).
+        function chartBounds(tfId) {
+            const cd = canvasData[tfId];
+            if (!cd || !cd.prices || cd.prices.length < 2) return null;
+            let lo = Infinity, hi = -Infinity;
+            const scan = v => { if (v < lo) lo = v; if (v > hi) hi = v; };
+            cd.prices.forEach(scan);
+            cd.a84.forEach(scan);
+            const t = boxTargets[tfId];
+            if (t && t.active) scan(t.frozenPrice);
+            if (!isFinite(lo) || !isFinite(hi)) return null;
+            return { top: hi, bottom: lo };
+        }
+
+        // The 4h target line was crossed. dir = 'down' or 'up', level = that target line.
+        function startBreach(dir, level, since) {
+            if (breachKey(dir, level) === breachEndedKey) return;
+            escalate(currentAsset); // strip comes up (does nothing if it is already up)
+            // Same breach still going? keep the numbers frozen at the first moment.
+            if (breach && breach.asset === currentAsset && breach.dir === dir && (!breach.inside || breach.level === level)) return;
+            const b = chartBounds('15m');
+            if (!b) return;
+            breach = { asset: currentAsset, dir: dir, level: level, top: b.top, bottom: b.bottom, inside: false, since: since || Date.now() };
+        }
+
+        // Live check every minute: has price crossed the live 4h target line?
+        // (The 4h box only gets a new candle every 4 hours, so this catches the cross sooner.)
+        function detectLiveBreach(price) {
+            const s = boxTargets['4h'];
+            if (!s || !s.active || !price) return;
+            if (s.direction === 'bear' && price <= s.frozenPrice) startBreach('down', s.frozenPrice);
+            else if (s.direction === 'bull' && price >= s.frozenPrice) startBreach('up', s.frozenPrice);
+        }
+
+        // What the 15m badge must show while a breach is on. null = no breach, badge works as normal.
+        //  - price still beyond the 4h target line: down = RED, up = GREEN (pink line ignored)
+        //  - price back inside: keeps that color until price crosses the frozen 15m number the other way
+        //    down breach: GREEN only above the frozen 15m top, under it RED again
+        //    up breach:   RED only under the frozen 15m bottom, above it GREEN again
+        function breachSignal(price) {
+            if (!breach || breach.asset !== currentAsset || !price) return null;
+            const down = breach.dir === 'down';
+            const outside = down ? price <= breach.level : price >= breach.level;
+            breach.inside = !outside;
+            if (outside) return down ? 'SELL' : 'BUY';
+            if (down) return price > breach.top ? 'BUY' : 'SELL';
+            return price < breach.bottom ? 'SELL' : 'BUY';
+        }
+
+        // The breach is over when price has gone past BOTH the daily and weekly targets
+        // (or it is older than the safety stop). Then the strip goes away and the badge works as normal.
+        function checkBreachEnd() {
+            if (!breach || breach.asset !== currentAsset) return;
+            const price = currentLivePrice();
+            let finished = false;
+            if (Date.now() - breach.since > BREACH_MAX_DAYS * 86400000) finished = true;
+            if (!finished && price && escState.asset === currentAsset) {
+                const d = escState.d, w = escState.w;
+                if (d && !d.na && w && !w.na) {
+                    finished = breach.dir === 'down'
+                        ? (price <= d.target && price <= w.target)
+                        : (price >= d.target && price >= w.target);
+                }
+            }
+            if (finished) {
+                breachEndedKey = breachKey(breach.dir, breach.level);
+                breach = null;
+                resetEscalation();
+            }
+        }
+
+        // On page load / asset switch: replay the 4h history with the same target math,
+        // find the latest 4h hit, and bring the breach (and the strip) back. Every visitor sees the same thing.
+        async function rebuildBreach(asset) {
+            try {
+                const cap = CANDLE_CAP['4h'];
+                const steps = BREACH_MAX_DAYS * 6; // 6 four-hour candles per day
+                const endTime = Date.now();
+                const startTime = endTime - (cap + steps) * INTERVAL_MINUTES['4h'] * 60 * 1000;
+                const res = await fetch('https://api.hyperliquid.xyz/info', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ type: 'candleSnapshot', req: { coin: asset, interval: HL_INTERVALS['4h'], startTime: startTime, endTime: endTime }, dex: getDex(asset) })
+                });
+                const candles = await res.json();
+                if (asset !== currentAsset) return;
+                if (!Array.isArray(candles) || candles.length < 20) return;
+
+                const raw = candles.map(c => [0, parseFloat(c.h), parseFloat(c.l), 0, parseFloat(c.c), parseFloat(c.v)]);
+                const st = { frozenPrice: null, direction: null, maxGap: 0, active: false };
+                const first = raw.length >= cap ? cap - 1 : 14;
+                let lastHit = null;
+                for (let e = first; e < raw.length; e++) {
+                    const win = raw.slice(Math.max(0, e + 1 - cap), e + 1);
+                    const a84 = calcA84Target(win);
+                    const r = stepTarget(st, win, a84, win[win.length - 1][4]);
+                    if (r.ready && r.hit) {
+                        lastHit = { dir: st.direction === 'bear' ? 'down' : 'up', level: st.frozenPrice, since: candles[e].t + INTERVAL_MINUTES['4h'] * 60 * 1000 };
+                    }
+                }
+                if (!lastHit) return;
+                if (Date.now() - lastHit.since > BREACH_MAX_DAYS * 86400000) return;
+                if (breach && breach.asset === asset) return; // the live check already found one
+                if (breachKey(lastHit.dir, lastHit.level) === breachEndedKey) return;
+
+                const price = currentLivePrice() || raw[raw.length - 1][4];
+                const t = await Promise.all([fetchEscTarget(asset, '1d'), fetchEscTarget(asset, '1w')]);
+                if (asset !== currentAsset) return;
+                const d = t[0], w = t[1];
+                if (!d.na && !w.na) {
+                    const done = lastHit.dir === 'down'
+                        ? (price <= d.target && price <= w.target)
+                        : (price >= d.target && price >= w.target);
+                    if (done) return; // both daily and weekly targets already reached — nothing to show
+                }
+                startBreach(lastHit.dir, lastHit.level, lastHit.since);
+                checkPublicBridgeAlert();
+            } catch(e) {
+                console.log('Rebuild breach error:', e);
+            }
+        }
+
         function loadAllCharts(asset) {
-            TIMEFRAMES.forEach(tf => initCandles(asset, HL_INTERVALS[tf], tf));
+            return Promise.all(TIMEFRAMES.map(tf => initCandles(asset, HL_INTERVALS[tf], tf)));
         }
 
         function checkTMVBreakout() {
@@ -759,13 +908,21 @@
             const price = livePrice || state15m.lastClose;
             if (a84_15m == null || price == null) return;
 
+            // Normal rule: price under the pink 15m line = BUY, over it = SELL.
             const obvAbovePrice = a84_15m > price;
-            const signal = obvAbovePrice ? 'BUY' : 'SELL';
+            let signal = obvAbovePrice ? 'BUY' : 'SELL';
+
+            // 4h breach rule: while a breach is on, the pink line is ignored (see breachSignal).
+            const modePrice = currentLivePrice() || price;
+            detectLiveBreach(modePrice);
+            const forced = breachSignal(modePrice);
+            if (forced) signal = forced;
+
             if (signal !== lastPublicSignal) {
                 lastPublicSignal = signal;
                 const msgBox = document.getElementById('public-bridge-15m');
                 if (msgBox) {
-                    if (obvAbovePrice) {
+                    if (signal === 'BUY') {
                         msgBox.innerHTML = '15m: Buy signal predominant.<br>Price rising under accumulation toward target. If short and down 10%+, consider closing.';
                         msgBox.style.color = '#00ff88';
                         msgBox.style.borderColor = '#00ff88';
@@ -893,8 +1050,6 @@
                 const pnlDisplay = pnlPct !== null ? (pnlPct >= 0 ? '+' : '') + pnlPct.toFixed(2) + '%' : '—';
                 const pnlColor = pnlPct !== null ? (pnlPct >= 0 ? '#00ff00' : '#ff0000') : '#888888';
                 const displayCoin = p.coin.includes(':') ? p.coin.split(':')[1] : p.coin;
-                const liqDisplay = p.liquidationPx ? p.liquidationPx.toFixed(1) : '—';
-                const levDisplay = p.leverage && p.leverage.value ? p.leverage.value + 'x' : '—';
 
                 openHtml += '<div style="display: inline-flex; align-items: center; gap: 16px; margin: 5px 10px; padding: 8px 14px; border: 1px solid rgba(255,20,147,0.2); border-radius: 6px;">';
                 openHtml += '<span style="color: #00ffff; font-weight: bold; min-width: 70px;">' + displayCoin + '</span>';
@@ -902,8 +1057,6 @@
                 openHtml += '<span style="color: #ffffff; font-size: 11px;">Entry: ' + p.entryPx.toFixed(2) + '</span>';
                 openHtml += '<span style="color: #ffffff; font-size: 11px;">Mark: ' + (markPx ? markPx.toFixed(2) : '—') + '</span>';
                 openHtml += '<span style="color: ' + pnlColor + '; font-weight: bold; min-width: 55px;">' + pnlDisplay + '</span>';
-                openHtml += '<span style="color: #ffffff; font-size: 11px;">Liq: ' + liqDisplay + '</span>';
-                openHtml += '<span style="color: #ffffff; font-size: 11px;">Lev: ' + levDisplay + '</span>';
                 openHtml += '</div>';
             });
             openList.innerHTML = openHtml;
@@ -997,6 +1150,8 @@ function connect() {
             const publicBadge = document.getElementById('public-bridge-15m');
             if (publicBadge) publicBadge.innerHTML = '';
             TIMEFRAMES.forEach(tf => { boxTargets[tf] = { frozenPrice: null, direction: null, maxGap: 0, active: false }; });
+            breach = null; // forget the old asset's breach
+            breachEndedKey = '';
             resetEscalation(); // hide the daily/weekly strip and forget the old asset
 
             if (currentAsset.startsWith('xyz:')) {
@@ -1006,17 +1161,19 @@ function connect() {
                 stopXyzPolling();
             }
 
-            loadAllCharts(currentAsset);
+            const switchedTo = currentAsset;
+            loadAllCharts(switchedTo).then(() => rebuildBreach(switchedTo));
             setTimeout(checkPublicBridgeAlert, 2000);
             fetchTrades();
         });
 
         connect();
-        loadAllCharts(currentAsset);
+        loadAllCharts(currentAsset).then(() => rebuildBreach(currentAsset));
         setTimeout(checkPublicBridgeAlert, 2000);
         setInterval(() => {
             TIMEFRAMES.forEach(tf => updateCandles(currentAsset, HL_INTERVALS[tf], tf));
             checkTMVBreakout();
+            checkBreachEnd();
             checkPublicBridgeAlert();
             // Keep the daily/weekly strip fresh, but only while it is showing
             if (escState.asset === currentAsset) loadEscalation(currentAsset);
