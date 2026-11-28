@@ -211,6 +211,33 @@
         #calcModal .warn { color: var(--yellow); }
         #calcModal .get { color: var(--pink); }
         #calcModal .note { margin: 0; font-size: 11px; color: var(--dim); }
+
+        /* ===== PHONE FIT (v3): no sideways scroll, menu stays hidden, rows wrap ===== */
+        html { overflow-x: hidden; max-width: 100%; }
+        body { overflow-x: clip; max-width: 100%; }
+        @media(max-width: 768px) {
+            .nav-links {
+                right: 0;
+                transform: translateX(110%);
+                visibility: hidden;
+                transition: transform 0.3s ease, visibility 0s linear 0.3s;
+            }
+            .nav-links.active {
+                right: 0;
+                transform: none;
+                visibility: visible;
+                transition: transform 0.3s ease, visibility 0s;
+            }
+            #tradesPanel { max-width: 100%; }
+            .trade-row {
+                display: flex !important;
+                width: 100%;
+                margin: 5px 0 !important;
+                justify-content: flex-start;
+                text-align: left;
+                gap: 4px 12px !important;
+            }
+        }
     </style>
 <base target="_blank">
 <base target="_blank">
@@ -1051,7 +1078,7 @@
                 const pnlColor = pnlPct !== null ? (pnlPct >= 0 ? '#00ff00' : '#ff0000') : '#888888';
                 const displayCoin = p.coin.includes(':') ? p.coin.split(':')[1] : p.coin;
 
-                openHtml += '<div style="display: inline-flex; align-items: center; gap: 16px; margin: 5px 10px; padding: 8px 14px; border: 1px solid rgba(255,20,147,0.2); border-radius: 6px;">';
+                openHtml += '<div class="trade-row" style="display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; max-width: 100%; margin: 5px 10px; padding: 8px 14px; border: 1px solid rgba(255,20,147,0.2); border-radius: 6px;">';
                 openHtml += '<span style="color: #00ffff; font-weight: bold; min-width: 70px;">' + displayCoin + '</span>';
                 openHtml += '<span style="color: ' + sideColor + '; font-weight: bold; min-width: 45px;">' + sideText + '</span>';
                 openHtml += '<span style="color: #ffffff; font-size: 11px;">Entry: ' + p.entryPx.toFixed(2) + '</span>';
@@ -1087,7 +1114,7 @@
                     const sz = parseFloat(fill.sz).toFixed(4);
                     const time = new Date(fill.time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
 
-                    closedHtml += '<div style="display: inline-flex; align-items: center; gap: 14px; margin: 4px 10px; padding: 6px 12px; border: 1px solid rgba(255,20,147,0.15); border-radius: 6px; opacity: 0.75;">';
+                    closedHtml += '<div class="trade-row" style="display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; max-width: 100%; margin: 4px 10px; padding: 6px 12px; border: 1px solid rgba(255,20,147,0.15); border-radius: 6px; opacity: 0.75;">';
                     closedHtml += '<span style="color: #00ffff; font-weight: bold; font-size: 11px;">' + coin + '</span>';
                     closedHtml += '<span style="color: ' + sideColor + '; font-size: 11px; font-weight: 600;">' + dir + '</span>';
                     closedHtml += '<span style="color: #ffffff; font-size: 11px;">' + px + '</span>';
